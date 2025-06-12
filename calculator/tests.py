@@ -9,6 +9,7 @@ class TestCalculator(unittest.TestCase):
         self.calculator = Calculator()
 
     def test_addition(self):
+        print("HEREHERHEHHERHEEHREHERHHEER")
         result = self.calculator.evaluate("3 + 5")
         self.assertEqual(result, 8)
 

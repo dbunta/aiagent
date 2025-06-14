@@ -3,7 +3,7 @@ import sys
 from functions.get_files_info import get_files_info
 from functions.get_file_content import get_file_content
 from functions.write_file import write_file
-from functions.run_python import run_python_file
+from functions.run_python_file import run_python_file
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -71,9 +71,6 @@ if len(user_prompt) == 0:
     print("error: no query was provided")
     sys.exit(1)
 
-messages = [
-    types.Content(role="user", parts=[types.Part(text=user_prompt)]),
-]
 
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -145,27 +142,47 @@ available_functions = types.Tool(
     ]
 )
 
-
 client = genai.Client(api_key=api_key)
 
-response = client.models.generate_content(
-    model='gemini-2.0-flash-001', 
-    contents=messages, 
-    config=types.GenerateContentConfig(tools=[available_functions],system_instruction=system_prompt)
-)
-if is_verbose:
-    print(f"User prompt: {user_prompt}")
-    print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-    print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
-print(response.text)
-for function_call_part in response.function_calls:
-    print(f"Calling function: {function_call_part.name}({function_call_part.args})")
-    function_call_result = call_function(function_call_part, True)
-    if function_call_result.parts[0].function_response.response:
-        if is_verbose:
-            print(f"-> {function_call_result.parts[0].function_response.response}")
-    else:
-        print("An error occurred")
-        raise 
+retval = ""
+messages = [
+    types.Content(role="user", parts=[types.Part(text=user_prompt)]),
+]
+
+for i in range(20):
+    response = client.models.generate_content(
+        model='gemini-2.0-flash-001', 
+        contents=messages, 
+        config=types.GenerateContentConfig(tools=[available_functions],system_instruction=system_prompt)
+    )
+
+    for candidate in response.candidates:
+        messages.append(candidate.content)
+
+    if is_verbose:
+        print(f"User prompt: {user_prompt}")
+        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+    # if response.text is not None:
+    #     retval = response.text
+
+    if response.function_calls is None:
+        retval = response.text
+        break
+
+    for function_call_part in response.function_calls:
+        # print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+        function_call_result = call_function(function_call_part, is_verbose)
+        messages.append(function_call_result)
+        if function_call_result.parts[0].function_response is not None:
+            if is_verbose:
+                print(f"-> {function_call_result.parts[0].function_response.response}")
+        else:
+            print("An error occurred")
+            raise 
+
+print("Final response:")
+print(retval)
 
 
